@@ -17,8 +17,8 @@ By "represented" we mean
 * Elements are constructed from the roots as represented by other types, say `Complex{Int}`
 * Conversion and compatibility with other number types is supported.
 
-For example, the fourth roots of unity are closed under some functions with methods
-defined for `Complex`. In this case, we define methods for `Phase`. Methods involving
+The fourth roots of unity are closed under some functions with methods
+defined for `Complex`. We define methods of these functions for `Phase`. Methods involving
 addition are not included. Methods involving the additive identity (zero) are not
 included.
 
