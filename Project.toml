@@ -1,7 +1,7 @@
 name = "Phase4s"
 uuid = "c4c67b59-b612-4a28-8b47-1c875e8dafd5"
 authors = ["John Lapeyre"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
