@@ -89,4 +89,6 @@ using Test
     @test conj(Phase(-1)) == Phase(-1)
     @test conj(Phase(-im)) == Phase(im)
     @test conj(Phase(im)) == Phase(-im)
+
+    @test size(rand(Phase, 2, 3, 4)) == (2, 3, 4)
 end

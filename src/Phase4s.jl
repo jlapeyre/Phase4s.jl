@@ -12,19 +12,7 @@ const PT = UInt8
 
 Implements the cyclic group ℤ₄ represented by the fourth roots of unity.
 
-By "represented" we mean
-* Elements are labeled by the fourth roots of unity.
-* Elements are constructed from the roots as represented by other types, say `Complex{Int}`
-* Conversion and compatibility with other number types is supported.
-
-The fourth roots of unity are closed under some functions with methods
-defined for `Complex`. We define methods of these functions for `Phase`. Methods involving
-addition are not included. Methods involving the additive identity (zero) are not
-included.
-
-Usually, we require that `Phase` be explicitly converted to another type for functions
-that don't return `Phase`.  However a few, closely related to their role as phases, are
-implemented. Examples are `angle` and `log`.
+Conversion and compatibility with other number types is supported.
 
 # Examples:
 
@@ -96,34 +84,24 @@ end
 function _string_uint(x::Unsigned)
     return "0x" * string(x; pad=sizeof(x) << 1, base=16)
 end
-
-Base.one(::Type{Phase}) = Phase(1)
-Base.one(::Phase) = one(Phase)
-Base.:(*)(l::Phase, r::Phase) = Phase(mod(l.x + r.x, PT(4)))
-Base.:(/)(l::Phase, r::Phase) = Phase(mod(l.x - r.x, PT(4)))
-Base.show(io::IO, ::MIME"text/plain", p::Phase) = _print_phase(io, p)
-Base.show(io::IO, p::Phase) = _print_phase(io, p)
-
 # Use `im` rather than `i` so that we print a constructor call.
 function _print_phase(io::IO, p::Phase)
     return print(io, typeof(p), "(", ("+1", "+im", "-1", "-im")[p.x + 1], ")")
 end
+Base.show(io::IO, ::MIME"text/plain", p::Phase) = _print_phase(io, p)
+Base.show(io::IO, p::Phase) = _print_phase(io, p)
 
-Base.convert(T::Type{<:Complex}, p::Phase) = (one(T), T(im), T(-one(T)), T(-im))[p.x + 1]
-(::Type{T})(p::Phase) where {T<:Complex} = convert(T, p)
-Base.promote_rule(::Type{Phase}, T::Type{<:Complex}) = T
-Base.promote_rule(::Type{Phase}, ::Type{Complex{Bool}}) = promote_rule(Phase, Complex{Int})
-Base.promote_rule(::Type{Phase}, T::Type{<:Real}) = Complex{T}
-Base.promote_rule(::Type{Phase}, ::Type{Bool}) = promote_rule(Phase, Complex{Int})
-
-# For *(::Phase, ::Number) and /, the fallbacks are efficient.
-
-# Unary minus
-Base.:(-)(p::Phase) = Phase(mod(p.x + PT(2), PT(4)))
-# Power
-Base.:(^)(p::Phase, n::Integer) = Phase(mod(n * p.x, PT(4)) % PT)
-Base.:(^)(p::Phase, b::Bool) = ifelse(b, p, Phase(1))
-Base.inv(p::Phase) = Phase(mod(-p.x, PT(4)))
+Base.one(::Type{Phase}) = Phase(1)
+Base.one(::Phase) = one(Phase)
+# Two reasons for these MethodError's
+# 1) To add a method, someone will have to actively remove these methods, and hopefully
+#    ask why they are here.
+# 2) The location of the throw, and the error message is a bit more understandable compared
+#    to throwing in the fallback methods.
+Base.iszero(p::Phase) = throw(MethodError(iszero, (p,)))
+Base.iszero(::Type{Phase}) = throw(MethodError(iszero, (Phase,)))
+Base.zero(p::Phase) = throw(MethodError(zero, (p,)))
+Base.zero(::Type{Phase}) = throw(MethodError(zero, (Phase,)))
 
 Base.complex(p::Phase) = p
 Base.float(p::Phase) = Complex{Float64}(p)
@@ -143,9 +121,7 @@ function Base.reim(::Type{T}, p::Phase) where {T}
     return @inbounds vals[p.x + 1]
 end
 Base.reim(p::Phase) = reim(Int, p)
-
 Base.ispow2(p::Phase) = p == Phase(1)
-
 # Faster than if-else v1.11.2
 Base.sign(p::Phase) = @inbounds (Phase(1), Phase(1), Phase(-1), Phase(-1))[p.x + 1]
 
@@ -156,6 +132,49 @@ Base.sign(p::Phase) = @inbounds (Phase(1), Phase(1), Phase(-1), Phase(-1))[p.x +
 # Fallback would be ok, if Phase <: AbstractComplex. But AbstractComplex does not exist.
 Base.flipsign(p::Phase, y::Real) = ifelse(signbit(y), -p, p)
 Base.in(p::Phase, r::AbstractRange{<:Real}) = isreal(p) && real(p) in r
+
+Base.:(*)(l::Phase, r::Phase) = Phase(mod(l.x + r.x, PT(4)))
+Base.:(/)(l::Phase, r::Phase) = Phase(mod(l.x - r.x, PT(4)))
+
+Base.convert(T::Type{<:Complex}, p::Phase) = (one(T), T(im), T(-one(T)), T(-im))[p.x + 1]
+# Ensure a concrete type for Complex(::Phase)
+Base.Complex(p::Phase) = Complex{Int}(p)
+(::Type{T})(p::Phase) where {T<:Complex} = convert(T, p)
+Base.promote_rule(::Type{Phase}, T::Type{<:Complex}) = T
+Base.promote_rule(::Type{Phase}, ::Type{Complex{Bool}}) = promote_rule(Phase, Complex{Int})
+Base.promote_rule(::Type{Phase}, T::Type{<:Real}) = Complex{T}
+Base.promote_rule(::Type{Phase}, ::Type{Bool}) = promote_rule(Phase, Complex{Int})
+# For *(::Phase, ::Number) and /, the fallbacks are efficient.
+
+# Unary minus
+Base.:(-)(p::Phase) = Phase(mod(p.x + PT(2), PT(4)))
+# Power
+Base.:(^)(p::Phase, n::Integer) = Phase(mod(n * p.x, PT(4)) % PT)
+Base.:(^)(p::Phase, b::Bool) = ifelse(b, p, Phase(1))
+Base.inv(p::Phase) = Phase(mod(-p.x, PT(4)))
+
+# `Phase` is not closed under the following operations
+for op in (:(+), :(-))
+    @eval Base.$op(p1::Phase, p2::Phase) = $op(Complex(p1), Complex(p2))
+end
+
+for op in (:(^),)
+   # No red in @code_warntype on v1.11.2
+   @eval let  v = [complex(float(x)) for x in (1,im,-1,-im)], res = [$op(x,y) for x in v, y in v]
+        Base.$op(p1::Phase, p2::Phase) = @inbounds res[p1.x + 4 * p2.x + 1]
+    end
+end
+
+Base.conj(p::Phase) = iseven(p.x) ? p : -p
+Base.log(p::Phase) = Complex{Float64}(0, angle(p))
+Base.abs(p::Phase) = 1
+Base.abs2(p::Phase) = 1
+
+for op in (:exp, :angle, :cos, :sin, :tan, :asin, :acos, :atan,
+           :cosh, :sinh, :tanh, :acosh, :asinh, :atanh,
+           :cis, :cispi, :log2, :log10, :expm1, :log1p, :exp10, :exp2)
+   @eval Base.$op(p::Phase) = ($op(1.0 + 0im), $op(0.0 + 1.0im), $op(-1.0 + 0im), $op(0.0 - 1.0im))[p.x + 1]
+end
 
 """
     phase_from_factors(num_imag, num_minus)::Phase
@@ -180,23 +199,5 @@ function Random.rand(rng::Random.AbstractRNG, ::Random.SamplerType{Phase})
     # Converting a and b to UInt8 separately is faster v1.11.2
     return Phase(PT(a) | PT(b) << 1)
 end
-
-Base.conj(p::Phase) = iseven(p.x) ? p : -p
-
-# Faster than using if-else v1.11.2
-Base.angle(p::Phase)::Float64 = (0.0, float(pi), pi / 2, -pi / 2)[p.x + 1]
-Base.log(p::Phase) = Complex{Float64}(0, angle(p))
-Base.abs(p::Phase) = 1
-Base.abs2(p::Phase) = 1
-
-# Two reasons for these methods:
-# 1) To add a method, someone will have to actively remove these methods, and hopefully
-#    ask why they are here.
-# 2) The location of the throw, and the error message is a bit more understandable compared
-#    to throwing in the fallback methods.
-Base.iszero(p::Phase) = throw(MethodError(iszero, (p,)))
-Base.iszero(::Type{Phase}) = throw(MethodError(iszero, (Phase,)))
-Base.zero(p::Phase) = throw(MethodError(zero, (p,)))
-Base.zero(::Type{Phase}) = throw(MethodError(zero, (Phase,)))
 
 end # module Phase4s
