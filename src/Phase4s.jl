@@ -103,7 +103,7 @@ Base.iszero(::Type{Phase}) = throw(MethodError(iszero, (Phase,)))
 Base.zero(p::Phase) = throw(MethodError(zero, (p,)))
 Base.zero(::Type{Phase}) = throw(MethodError(zero, (Phase,)))
 
-Base.complex(p::Phase) = p
+Base.complex(p::Phase) = Complex(p)
 Base.float(p::Phase) = Complex{Float64}(p)
 
 # This is as fast as checking the low bit explicitly v1.11.2
